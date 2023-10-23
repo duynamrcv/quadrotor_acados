@@ -21,7 +21,8 @@ $ make install -j4
 
 Install acados_template Python package:
 ```
-$ pip install -e <acados_root>/interfaces/acados_template
+$ cd acados
+$ pip install -e interfaces/acados_template
 ```
 ***Note:*** The ```<acados_root>``` is the full path from ```/home/```.
 

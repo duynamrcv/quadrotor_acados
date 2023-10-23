@@ -24,7 +24,8 @@ class Quad:
             self.load(filename)
 
         self.p = np.zeros([3,1])    # position
-        self.q = np.zeros([4,1])    # quaternion rotation
+        self.q = np.zeros([4,1])    # quaternion rotation [w,x,y,z]
+        self.q[0,0] = 1
         self.v = np.zeros([3,1])    # velocity
         self.w = np.zeros([3,1])    # bodyrate
         self.T = np.zeros([4,1])    # thrust
@@ -45,7 +46,7 @@ class Quad:
                 self.l*(self.T[0]-self.T[1]-self.T[2]+self.T[3]),
                 self.l*(-self.T[0]-self.T[1]+self.T[2]+self.T[3]),
                 self.ctau*(self.T[0]-self.T[1]+self.T[2]-self.T[3])]]).T - np.cross(self.w, self.I@self.w, axisa=0, axisb=0).T)
-        
+        # print(np.array([[0, 0, (self.T[0]+self.T[1]+self.T[2]+self.T[3])/self.m]]).T)
         self.p = self.p + p_dot*dt
         self.q = self.q + q_dot*dt
         self.v = self.v + v_dot*dt
