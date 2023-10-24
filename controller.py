@@ -22,53 +22,52 @@ class MPCController:
         self.model = AcadosModel() #  ca.types.SimpleNamespace()
         self.constraint = ca.types.SimpleNamespace()
         
-        # # control inputs
-        # a = ca.SX.sym('a')
-        # omega = ca.SX.sym('omega')
-        # controls = ca.vertcat(a, omega)
+        # Model state
+        p = ca.MX.sym('p', 3)
+        v = ca.MX.sym('v', 3)
+        q = ca.MX.sym('q', 4)
+        w = ca.MX.sym('w', 3)
+        states = vertcat(p, v, q, w)
 
-        # # model states
-        # x = ca.SX.sym('x')
-        # y = ca.SX.sym('y')
-        # psi = ca.SX.sym('psi')
-        # v = ca.SX.sym('v')
-        # delta = ca.SX.sym('delta')
-        # states = ca.vertcat(x, y, psi, v, delta)
+        # Control inputs
+        thrust = ca.MX.sym('thrust', 4)
+        controls = vertcat(thrust)
 
-        # # acados model
-        # x_dot = ca.SX.sym('x_dot')
-        # y_dot = ca.SX.sym('y_dot')
-        # psi_dot = ca.SX.sym('psi_dot')
-        # v_dot = ca.SX.sym('v_dot')
-        # delta_dot = ca.SX.sym('delta_dot')
-        
-        # state_dot = ca.vertcat(x_dot, y_dot, psi_dot, v_dot, delta_dot)
-        # f_expl = ca.vertcat(v*ca.cos(psi),
-        #                     v*ca.sin(psi),
-        #                     v*ca.tan(delta)/self.quad.L,
-        #                     a,
-        #                     omega)
+        # Gravity
+        g = ca.DM([0, 0, -self.g])
 
-        # self.model.f_expl_expr = f_expl
-        # self.model.f_impl_expr = state_dot - f_expl
-        # self.model.x = states
-        # self.model.xdot = x_dot
-        # self.model.u = controls
-        # self.model.p = []
-        # self.model.name = 'quad'
+        # Acados model
+        p_dot = ca.MX.sym('p_dot', 3)
+        v_dot = ca.MX.sym('v_dot', 3)
+        q_dot = ca.MX.sym('q_dot', 4)
+        w_dot = ca.MX.sym('w_dot', 3)
+        state_dot = ca.vertcat(p_dot, v_dot, q_dot, w_dot)
+        f_expl = ca.vertcat(
+            v,
+            rotate_quat(q, vertcat(0, 0, (thrust[0]+thrust[1]+thrust[2]+thrust[3])/self.quad.m)) + g - v * self.quad.cd,
+            0.5*quat_mult(q, vertcat(0, w)),
+            ca.mtimes(self.quad.I_inv, vertcat(
+                self.quad.l*(thrust[0]-thrust[1]-thrust[2]+thrust[3]),
+                self.quad.l*(-thrust[0]-thrust[1]+thrust[2]+thrust[3]),
+                self.quad.ctau*(thrust[0]-thrust[1]+thrust[2]-thrust[3]))
+            -ca.cross(w,ca.mtimes(self.quad.I,w)))
+        )
 
-        # # constraint
-        # self.constraint.v_max = self.quad.max_v
-        # self.constraint.v_min = self.quad.min_v
-        # self.constraint.delta_max = self.quad.max_delta
-        # self.constraint.delta_min = self.quad.min_delta
+        self.model.f_expl_expr = f_expl
+        self.model.f_impl_expr = state_dot - f_expl
+        self.model.x = states
+        self.model.xdot = state_dot
+        self.model.u = controls
+        self.model.p = []
+        self.model.name = 'quad'
 
-        # self.constraint.a_max = self.quad.max_a
-        # self.constraint.a_min = self.quad.min_a
-        # self.constraint.omega_max = self.quad.max_omega
-        # self.constraint.omega_min = self.quad.min_omega
+        # Constraint
+        self.constraint.omega_max = np.array([[self.quad.omega_max_xy, self.quad.omega_max_xy, self.quad.omega_max_z]]).T
+        self.constraint.omega_min = -self.constraint.omega_max
 
-        # self.constraint.expr = ca.vcat([a, omega])
+        self.constraint.T_max = np.ones([4,1])*self.quad.T_max
+        self.constraint.T_min = np.ones([4,1])*self.quad.T_min
+        self.constraint.expr = ca.vcat(thrust)
 
     def setupController(self, t_horizon, n_nodes):
         '''
@@ -78,29 +77,29 @@ class MPCController:
         self.N = n_nodes
 
         # Ensure current working directory is current folder
-        # acados_source_path = os.environ['ACADOS_SOURCE_DIR']
-        # sys.path.insert(0, acados_source_path)
+        acados_source_path = os.environ['ACADOS_SOURCE_DIR']
+        sys.path.insert(0, acados_source_path)
 
-        # nx = self.model.x.size()[0]
-        # self.nx = nx
-        # nu = self.model.u.size()[0]
-        # self.nu = nu
-        # ny = nx + nu
-        # n_params = len(self.model.p)
+        nx = self.model.x.size()[0]
+        self.nx = nx
+        nu = self.model.u.size()[0]
+        self.nu = nu
+        ny = nx + nu
+        n_params = len(self.model.p)
 
-        # # create OCP
-        # ocp = AcadosOcp()
-        # # ocp.acados_include_path = acados_source_path + '/include'
-        # # ocp.acados_lib_path = acados_source_path + '/lib'
-        # ocp.model = self.model
-        # ocp.dims.N = self.N
-        # ocp.solver_options.tf = self.T
+        # create OCP
+        ocp = AcadosOcp()
+        # ocp.acados_include_path = acados_source_path + '/include'
+        # ocp.acados_lib_path = acados_source_path + '/lib'
+        ocp.model = self.model
+        ocp.dims.N = self.N
+        ocp.solver_options.tf = self.T
 
-        # # initialize parameters
-        # ocp.dims.np = n_params
-        # ocp.parameter_values = np.zeros(n_params)
+        # initialize parameters
+        ocp.dims.np = n_params
+        ocp.parameter_values = np.zeros(n_params)
 
-        # # cost type
+        # cost type
         # Q = np.diag([100.0, 100.0, 1.0, 1.0, 1.0])
         # R = np.diag([0.1, 0.1])
         # ocp.cost.cost_type = 'LINEAR_LS'

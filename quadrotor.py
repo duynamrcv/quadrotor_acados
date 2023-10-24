@@ -9,7 +9,7 @@ class Quad:
         self.I_inv = np.linalg.inv(self.I)                # Inertia inverse
         self.T_max = 5                                    # max thrust [N]
         self.T_min = 0                                    # min thrust [N]
-        self.omega_max = 3                                # max bodyrate [rad/s]
+        # self.omega_max = 3                                # max bodyrate [rad/s]
         self.ctau = 0.5                                   # thrust torque coeff.
         self.rampup_dist = 0
         self.T_ramp_start = 5
