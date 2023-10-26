@@ -58,3 +58,8 @@ with the quadrotor’s arm length $l$ and the rotor’s torque constant $c_\tau$
 $$
 0\leq T_{min} \leq T_i \leq T_{max}
 $$
+
+
+## Results
+### Moving to goal
+![goal](result.png)
