@@ -234,14 +234,16 @@ class Controller:
             (-cs.mtimes(f_thrust.T, x_f) + (self.quad.J[2] - self.quad.J[0]) * self.r[2] * self.r[0]) / self.quad.J[1],
             (cs.mtimes(f_thrust.T, c_f) + (self.quad.J[0] - self.quad.J[1]) * self.r[0] * self.r[1]) / self.quad.J[2])
 
-    def run_optimization(self, initial_state=None, goal=None, use_model=0, return_x=False):
+    def run_optimization(self, initial_state=None, goal=None, use_model=0, return_x=False, mode='pose'):
         """
         Optimizes a trajectory to reach the pre-set target state, starting from the input initial state, that minimizes
         the quadratic cost function and respects the constraints of the system
 
         :param initial_state: 13-element list of the initial state. If None, 0 state will be used
+        :param goal: 3 element [x,y,z] for moving to goal mode, 3*(N+1) for trajectory tracking mode
         :param use_model: integer, select which model to use from the available options.
         :param return_x: bool, whether to also return the optimized sequence of states alongside with the controls.
+        :param mode: string, whether to use moving to pose mode or tracking mode
         :return: optimized control input sequence (flattened)
         """
 
@@ -257,18 +259,18 @@ class Controller:
         self.acados_ocp_solver[use_model].set(0, 'ubx', x_init)
 
         # Set final condition
-        for j in range(self.N):
-            y_ref = np.array([goal[0], goal[1], goal[2], 1,0,0,0, 0,0,0, 0,0,0, 0,0,0,0])
-            # index = i + j
-            # if index >= len(xref):
-            #     index = -1
-            # y_ref = np.array([xref[index], yref[index], psiref[index], vref[index], deltaref[index], 0, 0])
-            self.acados_ocp_solver[use_model].set(j, 'yref', y_ref)
-        # indexN = i+self.N
-        # if indexN >= len(xref):
-        #     indexN = -1
-        y_refN = np.array([goal[0], goal[1], goal[2], 1,0,0,0, 0,0,0, 0,0,0])
-        self.acados_ocp_solver[use_model].set(self.N, 'yref', y_refN)
+        if mode == "pose":
+            for j in range(self.N):
+                y_ref = np.array([goal[0], goal[1], goal[2], 1,0,0,0, 0,0,0, 0,0,0, 0,0,0,0])
+                self.acados_ocp_solver[use_model].set(j, 'yref', y_ref)
+            y_refN = np.array([goal[0], goal[1], goal[2], 1,0,0,0, 0,0,0, 0,0,0])
+            self.acados_ocp_solver[use_model].set(self.N, 'yref', y_refN)
+        else:
+            for j in range(self.N):
+                y_ref = np.array([goal[j,0], goal[j,1], goal[j,2], 1,0,0,0, 0,0,0, 0,0,0, 0,0,0,0])
+                self.acados_ocp_solver[use_model].set(j, 'yref', y_ref)
+            y_refN = np.array([goal[self.N,0], goal[self.N,1], goal[self.N,2], 1,0,0,0, 0,0,0, 0,0,0])
+            self.acados_ocp_solver[use_model].set(self.N, 'yref', y_refN)
 
         # Solve OCP
         self.acados_ocp_solver[use_model].solve()
